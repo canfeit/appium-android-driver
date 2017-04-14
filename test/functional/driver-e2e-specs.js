@@ -1,21 +1,21 @@
 import chai from 'chai';
 import chaiAsPromised from 'chai-as-promised';
+import _ from 'lodash';
+import ADB from 'appium-adb';
 import AndroidDriver from '../..';
-import sampleApps from 'sample-apps';
+import DEFAULT_CAPS from './desired';
+
 
 chai.should();
 chai.use(chaiAsPromised);
-
-let driver;
-let defaultCaps = {
-  app: sampleApps('ApiDemos-debug'),
-  deviceName: 'Android',
-  platformName: 'Android',
-  androidInstallTimeout: '90000'
-};
 let expect = chai.expect;
 
+let defaultCaps = _.defaults({
+  androidInstallTimeout: 90000
+}, DEFAULT_CAPS);
+
 describe('createSession', function () {
+  let driver;
   before(() => {
     driver = new AndroidDriver();
   });
@@ -63,8 +63,8 @@ describe('createSession', function () {
     caps.autoLaunch = false;
     await driver.createSession(caps);
     let {appPackage, appActivity} = await driver.adb.getFocusedPackageAndActivity();
-    appPackage.should.not.equal(caps.appPackage);
-    appActivity.should.not.equal(caps.appActivity);
+    expect(appPackage).to.not.equal(caps.appPackage);
+    expect(appActivity).to.not.equal(caps.appActivity);
   });
   it('should be able to launch activity with custom intent parameter category', async () => {
     let caps = Object.assign({}, defaultCaps);
@@ -99,7 +99,7 @@ describe('createSession', function () {
     let serverCaps = await driver.getSession();
     serverCaps.takesScreenshot.should.exist;
   });
-  it('should get device name and udid in session details', async () => {
+  it('should get device name, udid, model, manufacturer and screen size in session details', async () => {
     let caps = Object.assign({}, defaultCaps);
     caps.appPackage = 'io.appium.android.apis';
     caps.appActivity = '.view.SplitTouchView';
@@ -110,6 +110,9 @@ describe('createSession', function () {
     let serverCaps = await driver.getSession();
     serverCaps.deviceName.should.exist;
     serverCaps.deviceUDID.should.exist;
+    serverCaps.deviceScreenSize.should.exist;
+    serverCaps.deviceModel.should.exist;
+    serverCaps.deviceManufacturer.should.exist;
   });
   it('should error out for activity that fails to load after app wait activity timeout', async () => {
     let caps = Object.assign({}, defaultCaps);
@@ -117,7 +120,14 @@ describe('createSession', function () {
     caps.appWaitDuration = 1000; // 1 second
     await driver.createSession(caps).should.eventually.be.rejectedWith(/never started/);
   });
-  it('should be able grant permissions', async () => {
+  it('should be able to grant permissions', async function () {
+    // TODO: why is there no entry for 5.1?
+    let adb = new ADB();
+    let apiLevel = await adb.getApiLevel();
+    if (apiLevel === '22' || apiLevel === '19' || apiLevel === '18') {
+      this.skip();
+      return;
+    }
     let caps = Object.assign({}, defaultCaps);
     caps.appPackage = 'io.appium.android.apis';
     caps.appActivity = 'io.appium.android.apis.app.HelloWorld';
@@ -129,6 +139,7 @@ describe('createSession', function () {
 });
 
 describe('close', function () {
+  let driver;
   before(() => {
     driver = new AndroidDriver();
   });
