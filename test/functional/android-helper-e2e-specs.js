@@ -1,8 +1,10 @@
 import chai from 'chai';
 import chaiAsPromised from 'chai-as-promised';
+import { retryInterval } from 'asyncbox';
 import helpers from '../../lib/android-helpers';
 import ADB from 'appium-adb';
 import { app } from './desired';
+import { MOCHA_TIMEOUT } from './helpers';
 
 
 let opts = {
@@ -17,9 +19,15 @@ chai.use(chaiAsPromised);
 describe('android-helpers e2e', () => {
   describe('installApkRemotely', () => {
     it('installs an apk by pushing it to the device then installing it from within', async function () {
-      this.timeout(15000);
-      var adb = await ADB.createADB();
-      await adb.uninstallApk(opts.appPackage);
+      this.timeout(MOCHA_TIMEOUT);
+
+      let adb = await ADB.createADB();
+      await retryInterval(10, 500, async function () {
+        if (await adb.isAppInstalled(opts.appPackage)) {
+          // this sometimes times out on Travis, so retry
+          await adb.uninstallApk(opts.appPackage);
+        }
+      });
       await adb.isAppInstalled(opts.appPackage).should.eventually.be.false;
       await helpers.installApkRemotely(adb, opts);
       await adb.isAppInstalled(opts.appPackage).should.eventually.be.true;
@@ -30,8 +38,7 @@ describe('android-helpers e2e', () => {
     before(async function () {
       adb = await ADB.createADB();
 
-      // restarting doesn't work on Android 7
-      if (await adb.getApiLevel() > 23) this.skip();
+      if (process.env.TRAVIS) return this.skip(); //eslint-disable-line curly
     });
     after(async () => {
       await helpers.ensureDeviceLocale(adb, 'en', 'US');
